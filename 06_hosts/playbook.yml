@@ -1,0 +1,14 @@
+---
+- name: host 파일 만들기
+  hosts: all
+  gather_facts: no
+  tasks:
+    - name: host 파일 복사 붙여넣기
+      copy:
+        src: files/hosts
+        dest: /etc/hosts
+        owner: root
+        group: root
+        mode: '0644'
+        # force: yes
+

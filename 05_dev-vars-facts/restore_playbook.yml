@@ -1,0 +1,24 @@
+---
+- name: restore playbook.yml
+  hosts: webserver
+  tasks: 
+    - name: 방화벽 삭제 - httpd
+      ansible.posix.firewalld:
+        service: "{{ ansible_local['custom']['general']['fwsvc'] }}"
+        state: disabled
+        permanent: true
+        immediate: true
+
+    - name: 서비스 중지 - firewalld, httpd
+      ansible.builtin.systemd_service:
+        state: stopped
+        name: "{{ item }}"
+        enabled: false
+      loop: 
+        - "{{ ansible_local['custom']['general']['service'] }}"
+        - firewalld
+
+    - name: 패키지 삭제 - httpd
+      ansible.builtin.dnf:
+        name: "{{ ansible_local['custom']['general']['package'] }}"
+        state: absent
