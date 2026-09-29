@@ -1,0 +1,81 @@
+---
+- name: playbook2.yml 실행 내역 복구 (Rollback)
+  hosts: webservers
+  become: true
+
+  vars:
+    # --------------------------------------------------
+    # SELinux 설정 복구 변수 선언
+    # --------------------------------------------------
+    selinux_state: enforcing
+    selinux_policy: targeted
+
+    # 적용했던 boolean 값을 false로 원복
+    selinux_booleans:
+      - name: httpd_can_network_connect
+        state: false
+        persistent: true
+
+    # 생성했던 fcontext 규칙 제거 (absent)
+    selinux_fcontexts:
+      - target: '/www(/.*)?'
+        setype: httpd_sys_content_t
+        state: absent
+
+    # 추가했던 포트 컨텍스트 규칙 제거 (absent)
+    selinux_ports:
+      - ports: 8888
+        proto: tcp
+        setype: http_port_t
+        state: absent
+
+  tasks:
+    # --------------------------------------------------
+    # 1. 방화벽 설정 복구 - 8888 포트 허용 제거
+    # --------------------------------------------------
+    - name: 방화벽 설정 복구 - http 커스텀 포트 허용 제거
+      ansible.posix.firewalld:
+        port: 8888/tcp
+        permanent: true
+        immediate: true
+        state: disabled
+      ignore_errors: true
+
+    # --------------------------------------------------
+    # 2. WEB 서비스 중지 및 비활성화
+    # --------------------------------------------------
+    - name: WEB 서비스 중지 및 부팅 시 자동 시작 해제
+      ansible.builtin.systemd:
+        name: httpd
+        state: stopped
+        enabled: false
+      ignore_errors: true
+
+    # --------------------------------------------------
+    # 3. RHEL System Role을 이용한 SELinux 원복
+    # --------------------------------------------------
+    - name: SELinux 설정 복구
+      ansible.builtin.include_role:
+        name: rhel-system-roles.selinux
+
+    # --------------------------------------------------
+    # 4. 생성된 파일 및 디렉토리 삭제
+    # --------------------------------------------------
+    - name: WEB 관련 파일 및 디렉토리 삭제
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /www
+        - /etc/httpd/conf/httpd.conf
+
+    # --------------------------------------------------
+    # 5. 설치된 패키지 삭제 (초기화)
+    # --------------------------------------------------
+    - name: WEB 관련 패키지 삭제
+      ansible.builtin.dnf:
+        name:
+          - httpd
+          - mod_ssl
+          - firewalld
+        state: absent
